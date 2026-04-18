@@ -1,143 +1,135 @@
-# 🛒 Instacart Market Basket Analysis Dashboard
+# Instacart Market Basket Analysis
 
-An end-to-end, interactive data science project built with **Streamlit** that explores the [Instacart Market Basket dataset](https://www.kaggle.com/c/instacart-market-basket-analysis) — covering exploratory analysis, customer behaviour, association rule mining, and a machine learning model that predicts product reorders.
+A data science project I built to go beyond notebooks — fully deployed, interactive, and solving real engineering problems along the way.
 
-
----
-
-## 📌 Project Overview
-
-This dashboard was built to demonstrate a full data science pipeline — from raw data ingestion and EDA all the way to a deployed, interactive ML-powered application. The dataset contains over **3 million orders** from more than **200,000 Instacart users**.
+🔗 **[Live App → instacart-app.streamlit.app](https://instacartapp.streamlit.app/EDA_Insights)**  
+📁 **[GitHub → Zulkifalkhan889/Instacart_app](https://github.com/Zulkifalkhan889/Instacart_app)**
 
 ---
 
-## 🧩 Pages & Features
+## What this project does
+
+The dataset is from Instacart's open grocery ordering data — 3.4 million orders, 200K+ users, 50K products. I used it to build three things:
+
+- An **EDA dashboard** that lets you explore order patterns by day, hour, and product with interactive filters  
+- A **market basket analysis** using the Apriori algorithm to find which products get bought together  
+- An **XGBoost model** that predicts whether a user will reorder a specific product in their next order  
+
+Everything runs in a single Streamlit app with a sidebar for navigation.
+
+---
+
+## The part that was actually hard
+
+Getting this to run on Streamlit Cloud's free tier (1 GB RAM) with a 3.1 GB dataset was the real challenge. The naive approach — download CSVs, merge 32 million rows, run groupbys — consistently crashed the server with a silent memory kill.
+
+The fix was to stop doing heavy computation at runtime altogether. I wrote a local script (`save_artifacts.py`) that runs once on my machine, pre-computes every aggregation the dashboard needs, and saves the results as small pickle files (~5 MB each). The deployed app just downloads and displays those — no merging, no groupbys, no crashes.
+
+Local machine Google Drive Streamlit Cloud
+───────────── ──────────── ───────────────
+save_artifacts.py → upload → eda_data.pkl → download on first load
+(runs once, ~15min) model.pkl (~seconds, cached)
+apriori_rules.pkl
+
+
+RAM usage went from ~2.5 GB (crashes) to under 400 MB (stable).
+
+---
+
+## Pages
 
 ### 📊 EDA & Insights
-- Business KPIs — unique customers, total orders, avg basket size, reorder rate, peak day & hour
-- Order distribution by day of week and hour of day
-- Shopping activity heatmap (Day × Hour)
-- Top 10 most ordered and most reordered products
-- Reorder behaviour breakdown and basket size distribution
-- **Interactive sidebar filters** — filter all charts and KPIs by day of week and hour
+Six KPI cards at the top — customers, orders, products, reorder rate, basket size, peak time. Below that: order distribution by day and hour, a day×hour heatmap, top 10 ordered and reordered products, and basket size distribution. All charts respond to the sidebar filters instantly because they're filtering pre-aggregated tables, not raw data.
 
-### 🔁 Association Rules (Apriori)
-- Market basket analysis using the Apriori algorithm
-- Discover which products are frequently bought together
-- Filterable rules table by support, confidence, and lift
+### 🔗 Association Rules
+Apriori on a sample of 5,000 orders across the top 150 products. The output is a filterable table of rules sorted by lift — so you can see things like "customers who buy organic strawberries also tend to buy organic raspberries, with 3.2x lift."
 
-### 🤖 ML Model — Reorder Prediction
-- XGBoost binary classifier trained to predict whether a user will reorder a product
-- Feature engineering at user, product, and user-product level
-- Threshold-optimised for F1 score
-- Model evaluation: Accuracy, Precision, Recall, F1, ROC-AUC
-- ROC curve, Confusion Matrix, and Feature Importance charts
+### 🤖 Reorder Prediction Model
+XGBoost binary classifier: given a user and a product, will the user reorder it in their next order? Features are engineered at three levels — user behaviour, product popularity, and user-product history. The classification threshold is optimised by sweeping 0.1 to 0.9 and picking the best F1 on the training set. The model page shows accuracy, precision, recall, F1, ROC-AUC, a confusion matrix, and feature importance.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech stack
 
-| Layer | Tools |
-|---|---|
-| Dashboard & UI | Streamlit |
-| Data Manipulation | Pandas, NumPy |
+| Component | Tools |
+|----------|------|
+| App framework | Streamlit |
+| Data | Pandas, NumPy |
 | Visualisation | Plotly |
-| Machine Learning | XGBoost, Scikit-learn |
-| Association Rules | MLxtend |
-| Data Storage | Google Drive (via gdown) |
+| ML | XGBoost, scikit-learn |
+| Association rules | MLxtend |
+| Data storage | Google Drive via gdown |
 | Deployment | Streamlit Community Cloud |
 
 ---
 
-## 📁 Project Structure
+## Run it locally
 
-```
-instacart-dashboard/
-│
-├── app.py                        # Main entry point
-├── data_loader.py                # Data loading, feature engineering, model training
-├── requirements.txt              # Python dependencies
-│
-└── pages/
-    ├── eda_insights.py           # EDA & Insights page
-    ├── association_rules.py      # Apriori / Market Basket page
-    └── ml_model.py               # XGBoost model & evaluation page
-```
-
-> **Note:** The raw CSV files (~3.1 GB) are not stored in this repo. They are hosted on Google Drive and downloaded automatically at runtime via `gdown`.
-
----
-
-## 🚀 Run Locally
-
-**1. Clone the repo**
 ```bash
 git clone https://github.com/Zulkifalkhan889/Instacart_app.git
 cd Instacart_app
-```
-
-**2. Install dependencies**
-```bash
 pip install -r requirements.txt
+streamlit run app.py
 ```
 
-**3. Add your data**
+The app will automatically download the data files from Google Drive on first run. If you want to use your own copy of the data, place these files in the project root or a `data/` subfolder:
 
-Place the following CSV files in the project root or a `data/` subfolder:
 ```
 orders.csv
 products.csv
 order_products__prior.csv
 order_products__train.csv
 ```
-Or they will be downloaded automatically from Google Drive on first run.
 
-**4. Run the app**
-```bash
-streamlit run app.py
+---
+
+## Dataset
+
+[Instacart Market Basket Analysis](https://www.kaggle.com/c/instacart-market-basket-analysis) from Kaggle.
+
+| File | Description |
+|------|------------|
+| `orders.csv` | One row per order — user, timing, order sequence |
+| `products.csv` | Product names and department/aisle IDs |
+| `order_products__prior.csv` | Products in each prior order (32M rows) |
+| `order_products__train.csv` | Products in the training order — used as labels |
+
+The CSVs total ~3.1 GB and are not stored in this repo. They live on Google Drive and are pulled down automatically by `data_loader.py`.
+
+---
+
+## Model details
+
+**Task:** binary classification — will user *u* reorder product *p* in their next order?
+
+### Features engineered at three levels:
+
+- **User level** — how many orders they've placed, average days between orders, preferred shopping hour and day  
+- **Product level** — overall reorder rate, average hour and day it gets ordered  
+- **User–product level** — how many times this user has ordered this product, their personal reorder rate for it, average cart position, average days between reorders  
+
+**Training:**  
+70/30 split on users with `eval_set == 'train'`. Class imbalance handled with `scale_pos_weight`. Threshold sweep from 0.1 to 0.9 to maximise F1.
+
+---
+
+## Project structure
+
+```
+Instacart_app/
+├── app.py                   — landing page
+├── data_loader.py           — all data loading, caching, model loading
+├── requirements.txt
+├── README.md
+└── pages/
+    ├── 1_📊_EDA_Insights.py
+    ├── 2_🔗_Apriori_Rules.py
+    └── 3_🤖_ML_Model.py
 ```
 
 ---
 
-## 📦 Dataset
+## Author
 
-- **Source:** [Instacart Market Basket Analysis — Kaggle](https://www.kaggle.com/c/instacart-market-basket-analysis)
-- **Size:** ~3.1 GB across 4 CSV files
-- **Scale:** 3.4M orders · 206K users · 50K products
-
-| File | Description |
-|---|---|
-| `orders.csv` | Order metadata per user |
-| `products.csv` | Product names and IDs |
-| `order_products__prior.csv` | Products in prior orders |
-| `order_products__train.csv` | Products in training orders (labels) |
-
----
-
-## 🧠 ML Model Details
-
-**Task:** Binary classification — will a user reorder a given product in their next order?
-
-**Features engineered across 3 levels:**
-
-| Level | Features |
-|---|---|
-| User | Total orders, avg days between orders, preferred hour & day |
-| Product | Reorder rate, avg order hour, avg order day |
-| User–Product | Order count, reorder count, reorder rate, avg cart position, avg days between |
-
-**Model:** XGBoost with `scale_pos_weight` to handle class imbalance  
-**Threshold:** Optimised on training F1 score across a sweep from 0.1 to 0.9
-
----
-
-## ⚙️ Deployment Notes
-
-The app is deployed on **Streamlit Community Cloud**. Since the dataset is ~3.1 GB, CSVs are hosted on Google Drive. On first load, `data_loader.py` downloads them automatically using `gdown` and caches them with `@st.cache_data` so subsequent visitors load instantly.
-
----
-
-## 👤 Author
-
-**Zulkifal khan**  
-[LinkedIn](https://linkedin.com/in/yourprofile) · [GitHub](https://github.com/Zulkifalkhan889) · [Email](mailto:zulkifalkhan126@email.com)
+**Zulkifal Khan**  
+[GitHub](https://github.com/Zulkifalkhan889)

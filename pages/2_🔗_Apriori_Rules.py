@@ -133,7 +133,7 @@ styled = (display.style
     .format({"support":"{:.4f}","confidence":"{:.4f}","lift":"{:.3f}","conviction":"{:.3f}"})
     .map(color_lift, subset=["lift"]))
 st.dataframe(styled, use_container_width=True, height=300)
-an
+
 # ── Top rules bar ─────────────────────────────────────────────────────────────
 st.markdown('<div class="sec">🏆 Top Rules by Lift</div>', unsafe_allow_html=True)
 top15 = filt.nlargest(15,"lift").copy()

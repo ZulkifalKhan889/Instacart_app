@@ -6,16 +6,16 @@ import os
 
 # ── Google Drive File IDs ─────────────────────────────────────────────────────
 DRIVE_IDS = {
-    # Raw CSVs
+    # Pre-computed artifacts — paste IDs after running save_artifacts.py
+    "eda_data.pkl":              "1CiYrcdetsu1q4MXV1gBy2XBxFYNZeXlC",
+    "model.pkl":                 "1dm4N4Wl3-vij8oohxzJ88sfQ_79wXIaF",
+    "apriori_rules.pkl":         "1ZkdYYmrpPzEh7DhWk1MtVBS8ADWy8atV",
+
+    # Raw CSVs (kept as fallback for local dev)
     "orders.csv":                "1beOjK3v7hFLbYvapshc8eDHg8-_1Tlh9",
     "products.csv":              "1yTib9V_yh-v9MSvGviW_TNuxLHLFOKN0",
     "order_products__prior.csv": "1nsvu044dz4S6cjQ3n28xsPbHS_IPcAE4",
     "order_products__train.csv": "16sTwt7_rZkhnYQdZCcFvdE6T0hoBjOhz",
-
-    # Artifacts — paste IDs after running save_artifacts.py and uploading to Drive
-    "combined.parquet":          "1rPIc3jG9cT0mR2FnR3pWLVfeOJxvETHG",
-    "model.pkl":                 "1dm4N4Wl3-vij8oohxzJ88sfQ_79wXIaF",
-    "apriori_rules.pkl":         "1ZkdYYmrpPzEh7DhWk1MtVBS8ADWy8atV",
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -64,34 +64,31 @@ def _get(name):
     return _download(name)
 
 
-# ── Public loaders ────────────────────────────────────────────────────────────
+# ── EDA loader — returns pre-computed dict, no heavy groupbys at runtime ──────
 
+@st.cache_data(show_spinner="Loading EDA data…")
+def load_eda_data():
+    """
+    Loads eda_data.pkl — a dict of small pre-aggregated dataframes:
+        order_kpis        for KPIs and bar charts
+        heatmap_df        for heatmap
+        top_products      for top products chart
+        top_reordered     for top reordered chart
+        product_per_order for unique products KPI
+    """
+    path = _get("eda_data.pkl")
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+
+# load_combined kept for any other pages that import it
 @st.cache_data(show_spinner="Loading data…")
 def load_combined():
-    """
-    Loads combined.parquet (pre-built by save_artifacts.py).
-    Contains all columns EDA needs:
-    order_id, user_id, product_id, product_name, reordered,
-    add_to_cart_order, order_number, order_dow, order_hour_of_day,
-    days_since_prior_order, day_name
-    """
-    path = _get("combined.parquet")
-    df = pd.read_parquet(path)
-
-    # ensure day_name exists
-    if "day_name" not in df.columns:
-        days_map = {0:"Sun",1:"Mon",2:"Tue",3:"Wed",4:"Thu",5:"Fri",6:"Sat"}
-        df["day_name"] = df["order_dow"].map(days_map)
-
-    return df
+    return load_eda_data().get("order_kpis")
 
 
 @st.cache_data(show_spinner="Loading raw datasets…")
 def load_raw():
-    """
-    Only used by load_model fallback and any page that needs orders/train separately.
-    On Streamlit Cloud this is not called for EDA — combined.parquet handles that.
-    """
     def read_orders(p):
         df = pd.read_csv(p,
             usecols=["order_id","user_id","eval_set","order_number",
@@ -112,7 +109,6 @@ def load_raw():
             usecols=["order_id","product_id","add_to_cart_order","reordered"],
             dtype={"order_id":"int32","product_id":"int32",
                    "add_to_cart_order":"int8","reordered":"int8"})
-
     try:
         return dict(
             orders         = read_orders(_get("orders.csv")),
@@ -128,12 +124,8 @@ def load_raw():
 @st.cache_data(show_spinner="Loading association rules…")
 def load_apriori_rules():
     path = _get("apriori_rules.pkl")
-    try:
-        with open(path, "rb") as f:
-            return pickle.load(f)
-    except Exception as e:
-        st.error(f"Failed to load apriori rules: {e}")
-        return None
+    with open(path, "rb") as f:
+        return pickle.load(f)
 
 
 FEATURE_COLS = [
@@ -147,20 +139,20 @@ FEATURE_COLS = [
 @st.cache_resource(show_spinner="Loading model…")
 def load_model():
     path = _get("model.pkl")
-    try:
-        with open(path, "rb") as f:
-            a = pickle.load(f)
-        return a["model"], a["metrics"], a["feat_imp"], a["threshold"], a["feature_cols"]
-    except Exception as e:
-        st.error(f"Failed to load model: {e}")
-        return None, None, None, None, None
+    with open(path, "rb") as f:
+        a = pickle.load(f)
+    return a["model"], a["metrics"], a["feat_imp"], a["threshold"], a["feature_cols"]
 
 
 @st.cache_data(show_spinner="Engineering features…")
 def load_features():
-    df = load_combined()
-    if df is None:
+    raw, _ = load_raw()
+    if raw is None:
         return None, None, None
+    df = (raw["order_products"]
+          .merge(raw["orders"][["order_id","user_id","order_number","order_dow",
+                                "order_hour_of_day","days_since_prior_order"]],
+                 on="order_id", how="left"))
 
     user_features = (df.groupby("user_id").agg(
         total_orders=("order_number","max"),

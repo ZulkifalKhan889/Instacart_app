@@ -7,4 +7,4 @@ gdown>=4.6.0
 xgboost
 scikit-learn
 mlxtend
- 
+networkx==3.2.1

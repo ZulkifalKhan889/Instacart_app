@@ -131,7 +131,7 @@ def color_lift(v):
 
 styled = (display.style
     .format({"support":"{:.4f}","confidence":"{:.4f}","lift":"{:.3f}","conviction":"{:.3f}"})
-    .applymap(color_lift, subset=["lift"]))
+    .map(color_lift, subset=["lift"]))
 st.dataframe(styled, use_container_width=True, height=300)
 an
 # ── Top rules bar ─────────────────────────────────────────────────────────────
